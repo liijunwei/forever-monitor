@@ -113,6 +113,7 @@ func (m *monitor) compareProcess(running map[int]*parsedProcess) {
 func (m *monitor) restart(pid int, cmd string) {
 	m.removePid <- pid
 
+	// TODO ideally fork a new process instead of fire new goroutine
 	go func() {
 		_, pid, err := common.RunCommand(cmd)
 		common.Boom(err, "failed to restart", cmd)
