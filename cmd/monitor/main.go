@@ -9,6 +9,13 @@ import (
 	"time"
 )
 
+// Note: when there is no target process running, program startup will panic
+//
+// TODO: need to figure out how to properly `fork` a new process
+// instead of new goroutine, because we don't expect the target process to
+// shutdown when the monitor program stops
+
+// TODO haven't test on linux yet
 func main() {
 	common.Assert(len(os.Args) == 2, "missing program name")
 
@@ -22,7 +29,7 @@ func main() {
 type monitor struct {
 	currentProg        string
 	targetProg         string
-	monitoredProcesses []*parsedProcess
+	monitoredProcesses map[int]*parsedProcess
 	addProcess         chan *parsedProcess
 	removePid          chan int
 }
@@ -46,25 +53,28 @@ func newMonitor(currentProg, targetProg string) *monitor {
 // restart if needed
 func (m *monitor) Start() {
 	ticker := time.NewTicker(1 * time.Second)
+
 	for {
 		select {
 		case <-ticker.C:
 			runningProcesses := m.parseProcess()
 			m.compareProcess(runningProcesses)
+			// spew.Dump(m.monitoredProcesses)
 		case process, ok := <-m.addProcess:
 			if ok {
-				m.monitoredProcesses = append(m.monitoredProcesses, process)
+				fmt.Println("adding process", process.pid)
+				m.monitoredProcesses[process.pid] = process
 			}
 		case pid, ok := <-m.removePid:
 			if ok {
-				// m.removeProcess(pid)
-				fmt.Println("removing pid", pid)
+				delete(m.monitoredProcesses, pid)
+				fmt.Println("removing process", pid)
 			}
 		}
 	}
 }
 
-func (m *monitor) parseProcess() []*parsedProcess {
+func (m *monitor) parseProcess() map[int]*parsedProcess {
 	fullCmd := fmt.Sprintf("ps | grep -v grep | grep -v main | grep -v %s | grep %s", m.currentProg, m.targetProg)
 
 	result, _, err := common.RunCommand(fullCmd)
@@ -73,7 +83,7 @@ func (m *monitor) parseProcess() []*parsedProcess {
 	fmt.Println(string(result))
 	lines := strings.Split(string(result), "\n")
 
-	processes := make([]*parsedProcess, 0, 100) // guess a number
+	processes := make(map[int]*parsedProcess)
 
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
@@ -83,7 +93,7 @@ func (m *monitor) parseProcess() []*parsedProcess {
 		detail, err := parseProcess(line)
 		common.Boom(err)
 
-		processes = append(processes, detail)
+		processes[detail.pid] = detail
 		// spew.Dump(detail)
 	}
 
@@ -91,18 +101,11 @@ func (m *monitor) parseProcess() []*parsedProcess {
 }
 
 // expected running: 1,2,3
-// actuall  running: 1,2
-func (m *monitor) compareProcess(running []*parsedProcess) {
-	runningPids := make(map[int]bool)
-	for _, p := range running {
-		runningPids[p.pid] = true
-	}
-
-	// restart if needed
-	for _, p := range m.monitoredProcesses {
-		if !runningPids[p.pid] {
-			fmt.Println("process", p.pid, "is not running, restarting")
-			go m.restart(p.pid, p.cmd)
+// actual   running: 1,2
+func (m *monitor) compareProcess(running map[int]*parsedProcess) {
+	for pid, process := range m.monitoredProcesses {
+		if _, ok := running[pid]; !ok {
+			m.restart(pid, process.cmd)
 		}
 	}
 }
@@ -110,15 +113,17 @@ func (m *monitor) compareProcess(running []*parsedProcess) {
 func (m *monitor) restart(pid int, cmd string) {
 	m.removePid <- pid
 
-	_, pid, err := common.RunCommand(cmd)
-	common.Boom(err, "failed to restart", cmd)
+	go func() {
+		_, pid, err := common.RunCommand(cmd)
+		common.Boom(err, "failed to restart", cmd)
 
-	process := &parsedProcess{
-		pid: pid,
-		cmd: cmd,
-	}
+		process := &parsedProcess{
+			pid: pid,
+			cmd: cmd,
+		}
 
-	m.addProcess <- process
+		m.addProcess <- process
+	}()
 }
 
 // line example

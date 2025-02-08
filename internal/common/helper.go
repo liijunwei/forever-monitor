@@ -29,6 +29,8 @@ func RunCommand(fullCmd string) ([]byte, int, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	// cmd.Start()
+	// cmd.Process.
 	if err := cmd.Run(); err != nil {
 		return nil, 0, fmt.Errorf("command failed:\n%s:\n%s%s", fullCmd, stderr.String(), stdout.String())
 	}
