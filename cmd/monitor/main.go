@@ -43,6 +43,10 @@ func (m *monitor) Start() {
 	}
 }
 
+// parse
+// storge
+// compare
+// restart if needed
 func (m *monitor) checkProcess() *parsedProcess {
 	fullCmd := fmt.Sprintf("ps | grep -v grep | grep -v main | grep -v %s | grep %s", m.currentProg, m.targetProg)
 
