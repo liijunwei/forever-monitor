@@ -15,7 +15,7 @@ import (
 // instead of new goroutine, because we don't expect the target process to
 // shutdown when the monitor program stops
 
-// TODO haven't test on linux yet
+// TODO haven't test on linux yet, just roughly tested the `ps`  command output is aligned with macos, expect it's fine
 func main() {
 	common.Assert(len(os.Args) == 2, "missing program name")
 
