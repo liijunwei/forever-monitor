@@ -1,11 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"forever-monitor/internal/common"
 	"os"
-	"os/exec"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/davecgh/go-spew/spew"
 )
 
 func main() {
@@ -13,37 +16,73 @@ func main() {
 
 	currentProg := os.Args[0]
 	targetProg := os.Args[1]
-	fullCmd := fmt.Sprintf("ps aux | grep -v grep | grep -v main | grep -v %s | grep %s", currentProg, targetProg)
 
-	result, err := runCommand(fullCmd)
-	if err != nil {
-		fmt.Println("failed to run ps aux", err.Error())
-		os.Exit(1)
-	}
-
-	common.Boom(err, "failed to run ps aux")
-
-	fmt.Println(string(result))
-	monitor := monitor{}
+	monitor := newMonitor(currentProg, targetProg)
 	monitor.Start()
 }
 
-type monitor struct{}
+type monitor struct {
+	currentProg string
+	targetProg  string
+}
 
-func (m monitor) Start() {}
+func newMonitor(currentProg, targetProg string) *monitor {
+	return &monitor{
+		currentProg: currentProg,
+		targetProg:  targetProg,
+	}
+}
 
-func runCommand(fullCmd string) ([]byte, error) {
-	fmt.Println(fullCmd)
+func (m *monitor) Start() {
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			m.checkProcess()
+		}
+	}
+}
 
-	cmd := exec.Command("sh", "-c", fullCmd)
+func (m *monitor) checkProcess() *parsedProcess {
+	fullCmd := fmt.Sprintf("ps | grep -v grep | grep -v main | grep -v %s | grep %s", m.currentProg, m.targetProg)
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	result, err := common.RunCommand(fullCmd)
+	common.Boom(err, "failed to run command", fullCmd)
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("command failed:\n%s:\n%s%s", fullCmd, stderr.String(), stdout.String())
+	fmt.Println(string(result))
+	lines := strings.Split(string(result), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		detail, err := parseProcess(line)
+		common.Boom(err)
+		spew.Dump(detail)
 	}
 
-	return stdout.Bytes(), nil
+	// panic("TODO")
+	return nil
+}
+
+// line example
+// 91013 ttys009    0:00.17 ./tmp/forever 100
+func parseProcess(line string) (*parsedProcess, error) {
+	fields := strings.Fields(line)
+	common.Assert(len(fields) >= 4, "unexpected output, not enough fields")
+
+	pid, err := strconv.Atoi(fields[0])
+	common.Boom(err)
+
+	cmd := strings.Join(fields[3:], " ")
+
+	return &parsedProcess{
+		pid: pid,
+		cmd: cmd,
+	}, nil
+}
+
+type parsedProcess struct {
+	pid int
+	cmd string
 }

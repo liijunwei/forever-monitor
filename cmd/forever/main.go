@@ -22,7 +22,7 @@ func newForeverProgram(args any) *foreverProgram {
 	return &foreverProgram{args: args}
 }
 
-func (m foreverProgram) Start() {
+func (m *foreverProgram) Start() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
