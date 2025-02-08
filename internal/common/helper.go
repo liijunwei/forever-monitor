@@ -20,8 +20,8 @@ func Assert(ok bool, msg ...string) {
 	}
 }
 
-func RunCommand(fullCmd string) ([]byte, error) {
-	fmt.Println(fullCmd)
+func RunCommand(fullCmd string) ([]byte, int, error) {
+	// fmt.Println(fullCmd)
 
 	cmd := exec.Command("sh", "-c", fullCmd)
 
@@ -30,8 +30,10 @@ func RunCommand(fullCmd string) ([]byte, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("command failed:\n%s:\n%s%s", fullCmd, stderr.String(), stdout.String())
+		return nil, 0, fmt.Errorf("command failed:\n%s:\n%s%s", fullCmd, stderr.String(), stdout.String())
 	}
 
-	return stdout.Bytes(), nil
+	pid := cmd.Process.Pid
+
+	return stdout.Bytes(), pid, nil
 }
