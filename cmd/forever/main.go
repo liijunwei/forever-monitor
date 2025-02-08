@@ -10,14 +10,16 @@ import (
 func main() {
 	common.Assert(len(os.Args) == 2, "missing program name")
 
-	foreverProgram := foreverProgram{
-		args: os.Args[1],
-	}
-	foreverProgram.Start()
+	program := newForeverProgram(os.Args[1])
+	program.Start()
 }
 
 type foreverProgram struct {
 	args any
+}
+
+func newForeverProgram(args any) *foreverProgram {
+	return &foreverProgram{args: args}
 }
 
 func (m foreverProgram) Start() {
